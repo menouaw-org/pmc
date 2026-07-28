@@ -1,3 +1,22 @@
+.idea/
+*.xml
+*.iml
+
+# Environnement Python
+.venv/
+
+# Caches Python et outils
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.ipynb_checkpoints/
+
+# Construction et distribution
+build/
+dist/
+*.egg-info/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -8,9 +27,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
