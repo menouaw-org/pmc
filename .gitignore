@@ -1,3 +1,6 @@
+raw/
+processed/
+
 .idea/
 *.xml
 *.iml
