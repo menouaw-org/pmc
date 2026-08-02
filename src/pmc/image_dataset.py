@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-DATA_ROOT = Path("data/processed/32x32/grayscale")
+PROCESSED_ROOT = Path("data/processed")
 CLASS_NAMES = ("avion", "montgolfiere", "parapente")
 
 
@@ -13,12 +13,17 @@ def bipolar_target(class_index: int) -> np.ndarray:
     return target
 
 
-def load_split(split_name: str) -> tuple[np.ndarray, np.ndarray]:
+def load_split(
+    split_name: str,
+    resolution: int = 32,
+    color_mode: str = "grayscale",
+) -> tuple[np.ndarray, np.ndarray]:
     inputs: list[np.ndarray] = []
     targets: list[np.ndarray] = []
+    data_root = PROCESSED_ROOT / f"{resolution}x{resolution}" / color_mode
 
     for class_index, class_name in enumerate(CLASS_NAMES):
-        class_directory = DATA_ROOT / split_name / class_name
+        class_directory = data_root / split_name / class_name
 
         for image_path in sorted(class_directory.glob("*.jpg")):
             with Image.open(image_path) as image:
