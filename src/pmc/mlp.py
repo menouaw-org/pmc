@@ -51,12 +51,25 @@ class MLP:
         batch_size: int = 1,
         shuffle: bool = True,
         seed: int | None = 24,
+        validation_inputs: list[list[float]] | np.ndarray | None = None,
+        validation_expected_outputs: list[list[float]] | np.ndarray | None = None,
     ) -> dict[str, list[float]]:
         inputs = np.asarray(dataset_inputs, dtype=float)
         expected_outputs = np.asarray(dataset_expected_outputs, dtype=float)
         random_generator = np.random.default_rng(seed)
-        history: dict[str, list[float]] = {"loss": [], "accuracy": []}
+        history: dict[str, list[float]] = {
+            "loss": [],
+            "accuracy": [],
+            "validation_loss": [],
+            "validation_accuracy": [],
+        }
         example_indices = np.arange(len(inputs))
+
+        validation_values = None
+        validation_targets = None
+        if validation_inputs is not None and validation_expected_outputs is not None:
+            validation_values = np.asarray(validation_inputs, dtype=float)
+            validation_targets = np.asarray(validation_expected_outputs, dtype=float)
 
         for _ in tqdm(range(epochs), desc="Entraînement"):
             if shuffle:
@@ -87,6 +100,16 @@ class MLP:
             loss = np.mean((predictions - expected_outputs) ** 2) / 2.0
             history["loss"].append(float(loss))
             history["accuracy"].append(self._accuracy(predictions, expected_outputs))
+
+            if validation_values is not None and validation_targets is not None:
+                validation_predictions = self._forward(validation_values)[-1]
+                validation_loss = np.mean(
+                    (validation_predictions - validation_targets) ** 2
+                ) / 2.0
+                history["validation_loss"].append(float(validation_loss))
+                history["validation_accuracy"].append(
+                    self._accuracy(validation_predictions, validation_targets)
+                )
 
         return history
 
