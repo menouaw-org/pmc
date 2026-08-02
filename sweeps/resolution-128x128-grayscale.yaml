@@ -8,35 +8,24 @@ metric:
 parameters:
   seed:
     values: [7, 24, 42, 123, 2026]
-  resolution:
-    value: 128
-  color_mode:
-    value: grayscale
-  hidden_layers:
-    value: "32"
-  epochs:
-    value: 200
-  learning_rate:
-    value: 0.01
-  batch_size:
-    value: 32
 
 command:
   - ${env}
-  - ${interpreter}
+  - uv
+  - run
+  - python
   - -m
   - ${program}
   - --resolution
-  - ${resolution}
+  - "128"
   - --color-mode
-  - ${color_mode}
+  - grayscale
   - --hidden-layers
-  - ${hidden_layers}
+  - "32"
   - --epochs
-  - ${epochs}
+  - "200"
   - --learning-rate
-  - ${learning_rate}
+  - "0.01"
   - --batch-size
-  - ${batch_size}
-  - --seed
-  - ${seed}
+  - "32"
+  - ${args}

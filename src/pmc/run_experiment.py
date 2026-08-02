@@ -5,8 +5,8 @@ from time import perf_counter
 
 import matplotlib.pyplot as plt
 import numpy as np
-import wandb
 
+import wandb
 from pmc.image_dataset import CLASS_NAMES, load_split
 from pmc.mlp import MLP
 
@@ -169,9 +169,7 @@ def main() -> None:
 
         reloaded_model = MLP.load(str(model_path))
         reloaded_outputs = np.asarray(reloaded_model.predict(validation_inputs))
-        maximum_reload_difference = float(
-            np.max(np.abs(validation_outputs - reloaded_outputs))
-        )
+        maximum_reload_difference = float(np.max(np.abs(validation_outputs - reloaded_outputs)))
         metrics = {
             "architecture": architecture,
             "resolution": arguments.resolution,
