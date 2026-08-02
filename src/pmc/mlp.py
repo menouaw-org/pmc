@@ -1,102 +1,121 @@
-import math
-import random
-
+import numpy as np
 from tqdm import tqdm
 
 
-class NaiveMLP:
-    def __init__(self, npl: list[int]) -> None:
+class MLP:
+    def __init__(self, npl: list[int], seed: int | None = 24) -> None:
         self.d = list(npl)
-        self.L = len(npl) - 1
+        random_generator = np.random.default_rng(seed)
+        self.weights = [
+            random_generator.uniform(
+                -1.0,
+                1.0,
+                size=(previous_size + 1, current_size),
+            )
+            for previous_size, current_size in zip(self.d[:-1], self.d[1:], strict=True)
+        ]
 
-        self.W: list[list[list[float]]] = []
-        for layer in range(self.L + 1):
-            self.W.append([])
+    @staticmethod
+    def _add_bias(values: np.ndarray) -> np.ndarray:
+        bias = np.ones((values.shape[0], 1))
+        return np.concatenate((bias, values), axis=1)
 
-            if layer == 0:
-                continue
+    def _forward(self, inputs: np.ndarray) -> list[np.ndarray]:
+        activations = [inputs]
 
-            for previous_neuron in range(self.d[layer - 1] + 1):
-                self.W[layer].append([])
+        for weights in self.weights:
+            previous_with_bias = self._add_bias(activations[-1])
+            activations.append(np.tanh(previous_with_bias @ weights))
 
-                for current_neuron in range(self.d[layer] + 1):
-                    if current_neuron == 0:
-                        weight = 0.0
-                    else:
-                        weight = random.random() * 2.0 - 1.0
+        return activations
 
-                    self.W[layer][previous_neuron].append(weight)
+    def predict(
+        self,
+        inputs: list[float] | list[list[float]] | np.ndarray,
+    ) -> list[float] | np.ndarray:
+        values = np.asarray(inputs, dtype=float)
+        single_example = values.ndim == 1
 
-        self.X: list[list[float]] = []
-        self.deltas: list[list[float]] = []
+        if single_example:
+            values = values.reshape(1, -1)
 
-        for layer in range(self.L + 1):
-            self.X.append([])
-            self.deltas.append([])
-
-            for neuron in range(self.d[layer] + 1):
-                self.X[layer].append(1.0 if neuron == 0 else 0.0)
-                self.deltas[layer].append(0.0)
-
-    def _propagate(self, inputs: list[float]) -> None:
-        for neuron in range(1, self.d[0] + 1):
-            self.X[0][neuron] = inputs[neuron - 1]
-
-        for layer in range(1, self.L + 1):
-            for current_neuron in range(1, self.d[layer] + 1):
-                total = 0.0
-
-                for previous_neuron in range(self.d[layer - 1] + 1):
-                    total += (
-                        self.W[layer][previous_neuron][current_neuron]
-                        * self.X[layer - 1][previous_neuron]
-                    )
-
-                self.X[layer][current_neuron] = math.tanh(total)
-
-    def predict(self, inputs: list[float]) -> list[float]:
-        self._propagate(inputs)
-        return self.X[self.L][1:]
+        outputs = self._forward(values)[-1]
+        return outputs[0].tolist() if single_example else outputs
 
     def train(
         self,
-        dataset_inputs: list[list[float]],
-        dataset_expected_outputs: list[list[float]],
-        training_steps: int,
+        dataset_inputs: list[list[float]] | np.ndarray,
+        dataset_expected_outputs: list[list[float]] | np.ndarray,
+        epochs: int,
         learning_rate: float,
-    ) -> None:
-        for _ in tqdm(range(training_steps)):
-            example_index = random.randint(0, len(dataset_inputs) - 1)
-            inputs = dataset_inputs[example_index]
-            expected_outputs = dataset_expected_outputs[example_index]
+        batch_size: int = 1,
+        shuffle: bool = True,
+        seed: int | None = 24,
+    ) -> dict[str, list[float]]:
+        inputs = np.asarray(dataset_inputs, dtype=float)
+        expected_outputs = np.asarray(dataset_expected_outputs, dtype=float)
+        random_generator = np.random.default_rng(seed)
+        history: dict[str, list[float]] = {"loss": [], "accuracy": []}
+        example_indices = np.arange(len(inputs))
 
-            self._propagate(inputs)
+        for _ in tqdm(range(epochs), desc="Entraînement"):
+            if shuffle:
+                random_generator.shuffle(example_indices)
 
-            for neuron in range(1, self.d[self.L] + 1):
-                output = self.X[self.L][neuron]
-                error = output - expected_outputs[neuron - 1]
-                self.deltas[self.L][neuron] = error * (1.0 - output**2)
+            for batch_start in range(0, len(inputs), batch_size):
+                batch_indices = example_indices[batch_start : batch_start + batch_size]
+                batch_inputs = inputs[batch_indices]
+                batch_targets = expected_outputs[batch_indices]
+                activations = self._forward(batch_inputs)
 
-            for layer in reversed(range(2, self.L + 1)):
-                for previous_neuron in range(1, self.d[layer - 1] + 1):
-                    total = 0.0
+                delta = (activations[-1] - batch_targets) * (1.0 - activations[-1] ** 2)
 
-                    for current_neuron in range(1, self.d[layer] + 1):
-                        total += (
-                            self.W[layer][previous_neuron][current_neuron]
-                            * self.deltas[layer][current_neuron]
-                        )
+                for layer_index in reversed(range(len(self.weights))):
+                    previous_activations = activations[layer_index]
+                    previous_with_bias = self._add_bias(previous_activations)
+                    gradient = previous_with_bias.T @ delta / len(batch_indices)
 
-                    previous_output = self.X[layer - 1][previous_neuron]
-                    self.deltas[layer - 1][previous_neuron] = total * (
-                        1.0 - previous_output**2
-                    )
+                    if layer_index == 0:
+                        self.weights[layer_index] -= learning_rate * gradient
+                    else:
+                        propagated_delta = delta @ self.weights[layer_index][1:, :].T
+                        next_delta = propagated_delta * (1.0 - previous_activations**2)
+                        self.weights[layer_index] -= learning_rate * gradient
+                        delta = next_delta
 
-            for layer in range(1, self.L + 1):
-                for previous_neuron in range(self.d[layer - 1] + 1):
-                    for current_neuron in range(1, self.d[layer] + 1):
-                        self.W[layer][previous_neuron][current_neuron] -= (
-                            learning_rate
-                            * self.X[layer - 1][previous_neuron]
-                            * self.deltas[layer][current_neuron]
-                        )
+            predictions = self._forward(inputs)[-1]
+            loss = np.mean((predictions - expected_outputs) ** 2) / 2.0
+            history["loss"].append(float(loss))
+            history["accuracy"].append(self._accuracy(predictions, expected_outputs))
+
+        return history
+
+    @staticmethod
+    def _accuracy(predictions: np.ndarray, expected_outputs: np.ndarray) -> float:
+        if predictions.shape[1] == 1:
+            predicted_classes = np.where(predictions[:, 0] >= 0.0, 1, -1)
+            expected_classes = np.where(expected_outputs[:, 0] >= 0.0, 1, -1)
+        else:
+            predicted_classes = np.argmax(predictions, axis=1)
+            expected_classes = np.argmax(expected_outputs, axis=1)
+
+        return float(np.mean(predicted_classes == expected_classes))
+
+    def save(self, file_path: str) -> None:
+        values = {"architecture": np.asarray(self.d)}
+        values.update(
+            {f"weights_{index}": weights for index, weights in enumerate(self.weights)}
+        )
+        np.savez(file_path, **values)
+
+    @classmethod
+    def load(cls, file_path: str) -> "MLP":
+        with np.load(file_path) as saved_values:
+            architecture = saved_values["architecture"].tolist()
+            model = cls(architecture, seed=0)
+            model.weights = [
+                saved_values[f"weights_{index}"].copy()
+                for index in range(len(architecture) - 1)
+            ]
+
+        return model
