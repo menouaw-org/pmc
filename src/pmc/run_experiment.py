@@ -5,13 +5,12 @@ from time import perf_counter
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 import wandb
+
 from pmc.image_dataset import CLASS_NAMES, load_split
 from pmc.mlp import MLP
 
 ARTIFACT_ROOT = Path("artifacts/experiments")
-DEFAULT_SEEDS = (7, 24, 42, 123, 2026)
 
 
 def parse_hidden_layers(raw_value: str) -> list[int]:
@@ -20,16 +19,14 @@ def parse_hidden_layers(raw_value: str) -> list[int]:
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run-name", required=True)
+    parser.add_argument("--run-name")
     parser.add_argument("--resolution", type=int, choices=(32, 64, 128), required=True)
     parser.add_argument("--color-mode", choices=("grayscale", "rgb"), required=True)
     parser.add_argument("--hidden-layers", required=True)
     parser.add_argument("--epochs", type=int, required=True)
     parser.add_argument("--learning-rate", type=float, required=True)
     parser.add_argument("--batch-size", type=int, required=True)
-    seed_group = parser.add_mutually_exclusive_group()
-    seed_group.add_argument("--seed", type=int)
-    seed_group.add_argument("--seeds", type=int, nargs="+")
+    parser.add_argument("--seed", type=int, required=True)
     return parser.parse_args()
 
 
@@ -91,15 +88,16 @@ def save_confusion_matrix(matrix: np.ndarray, output_path: Path) -> None:
     plt.close(figure)
 
 
-def run_experiment(
-    arguments: argparse.Namespace,
-    seed: int,
-    run_name: str,
-) -> None:
+def main() -> None:
+    arguments = parse_arguments()
     hidden_layers = parse_hidden_layers(arguments.hidden_layers)
     channel_count = 1 if arguments.color_mode == "grayscale" else 3
     input_dimension = arguments.resolution**2 * channel_count
     architecture = [input_dimension, *hidden_layers, len(CLASS_NAMES)]
+    run_name = arguments.run_name or (
+        f"resolution-{arguments.resolution}x{arguments.resolution}-"
+        f"{arguments.color_mode}-seed-{arguments.seed}"
+    )
 
     artifact_directory = ARTIFACT_ROOT / run_name
     artifact_directory.mkdir(parents=True, exist_ok=True)
@@ -118,7 +116,7 @@ def run_experiment(
         resolution=arguments.resolution,
         color_mode=arguments.color_mode,
     )
-    model = MLP(architecture, seed=seed)
+    model = MLP(architecture, seed=arguments.seed)
 
     with wandb.init(
         project="pmc",
@@ -131,7 +129,7 @@ def run_experiment(
             "epochs": arguments.epochs,
             "learning_rate": arguments.learning_rate,
             "batch_size": arguments.batch_size,
-            "seed": seed,
+            "seed": arguments.seed,
         },
     ) as run:
         start_time = perf_counter()
@@ -142,7 +140,7 @@ def run_experiment(
             learning_rate=arguments.learning_rate,
             batch_size=arguments.batch_size,
             shuffle=True,
-            seed=seed,
+            seed=arguments.seed,
             validation_inputs=validation_inputs,
             validation_expected_outputs=validation_targets,
         )
@@ -181,7 +179,7 @@ def run_experiment(
             "epochs": arguments.epochs,
             "learning_rate": arguments.learning_rate,
             "batch_size": arguments.batch_size,
-            "seed": seed,
+            "seed": arguments.seed,
             "duration_seconds": duration_seconds,
             "final_train_loss": history["loss"][-1],
             "final_train_accuracy": history["accuracy"][-1],
@@ -209,25 +207,6 @@ def run_experiment(
         run.log_artifact(artifact)
 
         print(json.dumps(metrics, indent=2, ensure_ascii=False))
-
-
-def main() -> None:
-    arguments = parse_arguments()
-
-    if arguments.seeds is not None:
-        seeds = tuple(arguments.seeds)
-    elif arguments.seed is not None:
-        seeds = (arguments.seed,)
-    else:
-        seeds = DEFAULT_SEEDS
-
-    for seed in seeds:
-        run_name = (
-            arguments.run_name
-            if len(seeds) == 1
-            else f"{arguments.run_name}-seed-{seed}"
-        )
-        run_experiment(arguments, seed, run_name)
 
 
 if __name__ == "__main__":

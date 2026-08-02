@@ -1,0 +1,42 @@
+program: pmc.run_experiment
+method: grid
+
+metric:
+  name: final_validation_accuracy
+  goal: maximize
+
+parameters:
+  seed:
+    values: [7, 24, 42, 123, 2026]
+  resolution:
+    value: 128
+  color_mode:
+    value: grayscale
+  hidden_layers:
+    value: "32"
+  epochs:
+    value: 200
+  learning_rate:
+    value: 0.01
+  batch_size:
+    value: 32
+
+command:
+  - ${env}
+  - ${interpreter}
+  - -m
+  - ${program}
+  - --resolution
+  - ${resolution}
+  - --color-mode
+  - ${color_mode}
+  - --hidden-layers
+  - ${hidden_layers}
+  - --epochs
+  - ${epochs}
+  - --learning-rate
+  - ${learning_rate}
+  - --batch-size
+  - ${batch_size}
+  - --seed
+  - ${seed}
