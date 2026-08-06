@@ -1,6 +1,6 @@
-import random
+import math
 
-from pmc import NaiveMLP
+from pmc import MLP
 
 
 def run_classification(
@@ -10,12 +10,11 @@ def run_classification(
     dataset_expected_outputs: list[list[float]],
     training_steps: int,
 ) -> None:
-    random.seed(24)
-    model = NaiveMLP(architecture)
+    model = MLP(architecture, seed=24)
     model.train(
         dataset_inputs,
         dataset_expected_outputs,
-        training_steps=training_steps,
+        epochs=math.ceil(training_steps / len(dataset_inputs)),
         learning_rate=0.01,
     )
 
