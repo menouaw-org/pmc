@@ -1,4 +1,5 @@
-artifacts/
+artifacts/baseline_32x32_grayscale/
+artifacts/experiments/
 wandb/
 raw/
 processed/

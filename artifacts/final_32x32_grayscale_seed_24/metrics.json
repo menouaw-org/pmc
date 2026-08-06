@@ -1,0 +1,42 @@
+{
+  "architecture": [
+    1024,
+    32,
+    3
+  ],
+  "resolution": 32,
+  "color_mode": "grayscale",
+  "epochs": 200,
+  "learning_rate": 0.01,
+  "batch_size": 32,
+  "seed": 24,
+  "training_examples": 1164,
+  "test_examples": 129,
+  "duration_seconds": 4.2045380000490695,
+  "final_train_loss": 0.30067347412020645,
+  "final_train_accuracy": 0.6812714776632303,
+  "final_test_loss": 0.5522345462684962,
+  "final_test_accuracy": 0.5116279069767442,
+  "test_recall_avion": 0.6923076923076923,
+  "test_recall_montgolfiere": 0.3333333333333333,
+  "test_recall_parapente": 0.425531914893617,
+  "maximum_reload_difference": 0.0,
+  "confusion_matrix": [
+    [
+      36,
+      3,
+      13
+    ],
+    [
+      13,
+      10,
+      7
+    ],
+    [
+      19,
+      8,
+      20
+    ]
+  ],
+  "wandb_run_url": "https://wandb.ai/menouaw-org/pmc/runs/dih7yr1r"
+}
