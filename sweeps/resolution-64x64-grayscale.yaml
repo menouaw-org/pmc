@@ -1,0 +1,31 @@
+program: pmc.run_experiment
+method: grid
+
+metric:
+  name: final_validation_accuracy
+  goal: maximize
+
+parameters:
+  seed:
+    values: [7, 24, 42, 123, 2026]
+
+command:
+  - ${env}
+  - uv
+  - run
+  - python
+  - -m
+  - ${program}
+  - --resolution
+  - "64"
+  - --color-mode
+  - grayscale
+  - --hidden-layers
+  - "32"
+  - --epochs
+  - "200"
+  - --learning-rate
+  - "0.01"
+  - --batch-size
+  - "32"
+  - ${args}
