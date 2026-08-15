@@ -6,7 +6,10 @@ class MLP:
     def __init__(self, npl: list[int], seed: int | None = 24) -> None:
         self.d = list(npl)
         random_generator = np.random.default_rng(seed)
-        self.weights = [
+        self.weights = self._initialize_weights(random_generator)
+
+    def _initialize_weights(self, random_generator: np.random.Generator) -> list[np.ndarray]:
+        return [
             random_generator.uniform(
                 -1.0,
                 1.0,
@@ -29,18 +32,83 @@ class MLP:
 
         return activations
 
+    @staticmethod
+    def _as_batch(inputs: list[float] | list[list[float]] | np.ndarray) -> tuple[np.ndarray, bool]:
+        values = np.asarray(inputs, dtype=float)
+        is_single_example = values.ndim == 1
+        if is_single_example:
+            values = values.reshape(1, -1)
+
+        return values, is_single_example
+
     def predict(
         self,
         inputs: list[float] | list[list[float]] | np.ndarray,
     ) -> list[float] | np.ndarray:
-        values = np.asarray(inputs, dtype=float)
-        single_example = values.ndim == 1
-
-        if single_example:
-            values = values.reshape(1, -1)
-
+        values, is_single_example = self._as_batch(inputs)
         outputs = self._forward(values)[-1]
-        return outputs[0].tolist() if single_example else outputs
+        return outputs[0].tolist() if is_single_example else outputs
+
+    def _output_delta(self, predictions: np.ndarray, targets: np.ndarray) -> np.ndarray:
+        return (predictions - targets) * self._tanh_derivative(predictions)
+
+    def _tanh_derivative(self, activations: np.ndarray) -> np.ndarray:
+        return 1.0 - activations**2
+
+    def _gradient(self, previous_activations: np.ndarray, delta: np.ndarray) -> np.ndarray:
+        previous_with_bias = self._add_bias(previous_activations)
+        return previous_with_bias.T @ delta / len(delta)
+
+    def _previous_layer_delta(
+        self,
+        delta: np.ndarray,
+        weights: np.ndarray,
+        previous_activations: np.ndarray,
+    ) -> np.ndarray:
+        weights_without_bias = weights[1:, :]
+        propagated_delta = delta @ weights_without_bias.T
+        return propagated_delta * self._tanh_derivative(previous_activations)
+
+    def _train_batch(
+        self,
+        batch_inputs: np.ndarray,
+        batch_targets: np.ndarray,
+        learning_rate: float,
+    ) -> None:
+        activations = self._forward(batch_inputs)
+        delta = self._output_delta(activations[-1], batch_targets)
+
+        for layer_index in reversed(range(len(self.weights))):
+            previous_activations = activations[layer_index]
+            gradient = self._gradient(previous_activations, delta)
+
+            previous_delta = None
+            if layer_index > 0:
+                previous_delta = self._previous_layer_delta(
+                    delta,
+                    self.weights[layer_index],
+                    previous_activations,
+                )
+
+            self.weights[layer_index] -= learning_rate * gradient
+            if previous_delta is not None:
+                delta = previous_delta
+
+    def _loss(self, predictions: np.ndarray, expected_outputs: np.ndarray) -> float:
+        squared_errors = (predictions - expected_outputs) ** 2
+        return float(np.mean(squared_errors) / 2.0)
+
+    def _record_metrics(
+        self,
+        history: dict[str, list[float]],
+        loss_key: str,
+        accuracy_key: str,
+        inputs: np.ndarray,
+        expected_outputs: np.ndarray,
+    ) -> None:
+        predictions = self._forward(inputs)[-1]
+        history[loss_key].append(self._loss(predictions, expected_outputs))
+        history[accuracy_key].append(self._accuracy(predictions, expected_outputs))
 
     def train(
         self,
@@ -79,36 +147,17 @@ class MLP:
                 batch_indices = example_indices[batch_start : batch_start + batch_size]
                 batch_inputs = inputs[batch_indices]
                 batch_targets = expected_outputs[batch_indices]
-                activations = self._forward(batch_inputs)
+                self._train_batch(batch_inputs, batch_targets, learning_rate)
 
-                delta = (activations[-1] - batch_targets) * (1.0 - activations[-1] ** 2)
-
-                for layer_index in reversed(range(len(self.weights))):
-                    previous_activations = activations[layer_index]
-                    previous_with_bias = self._add_bias(previous_activations)
-                    gradient = previous_with_bias.T @ delta / len(batch_indices)
-
-                    if layer_index == 0:
-                        self.weights[layer_index] -= learning_rate * gradient
-                    else:
-                        propagated_delta = delta @ self.weights[layer_index][1:, :].T
-                        next_delta = propagated_delta * (1.0 - previous_activations**2)
-                        self.weights[layer_index] -= learning_rate * gradient
-                        delta = next_delta
-
-            predictions = self._forward(inputs)[-1]
-            loss = np.mean((predictions - expected_outputs) ** 2) / 2.0
-            history["loss"].append(float(loss))
-            history["accuracy"].append(self._accuracy(predictions, expected_outputs))
+            self._record_metrics(history, "loss", "accuracy", inputs, expected_outputs)
 
             if validation_values is not None and validation_targets is not None:
-                validation_predictions = self._forward(validation_values)[-1]
-                validation_loss = np.mean(
-                    (validation_predictions - validation_targets) ** 2
-                ) / 2.0
-                history["validation_loss"].append(float(validation_loss))
-                history["validation_accuracy"].append(
-                    self._accuracy(validation_predictions, validation_targets)
+                self._record_metrics(
+                    history,
+                    "validation_loss",
+                    "validation_accuracy",
+                    validation_values,
+                    validation_targets,
                 )
 
         return history
@@ -116,8 +165,16 @@ class MLP:
     @staticmethod
     def _accuracy(predictions: np.ndarray, expected_outputs: np.ndarray) -> float:
         if predictions.shape[1] == 1:
-            predicted_classes = np.where(predictions[:, 0] >= 0.0, 1, -1)
-            expected_classes = np.where(expected_outputs[:, 0] >= 0.0, 1, -1)
+            predicted_classes = np.where(
+                predictions[:, 0] >= 0.0,
+                1,
+                -1,
+            )
+            expected_classes = np.where(
+                expected_outputs[:, 0] >= 0.0,
+                1,
+                -1,
+            )
         else:
             predicted_classes = np.argmax(predictions, axis=1)
             expected_classes = np.argmax(expected_outputs, axis=1)
