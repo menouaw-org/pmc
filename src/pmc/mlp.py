@@ -49,15 +49,11 @@ class MLP:
         outputs = self._forward(values)[-1]
         return outputs[0].tolist() if is_single_example else outputs
 
-    def _output_delta(self, predictions: np.ndarray, targets: np.ndarray) -> np.ndarray:
-        return (predictions - targets) * self._tanh_derivative(predictions)
-
     def _tanh_derivative(self, activations: np.ndarray) -> np.ndarray:
         return 1.0 - activations**2
 
-    def _gradient(self, previous_activations: np.ndarray, delta: np.ndarray) -> np.ndarray:
-        previous_with_bias = self._add_bias(previous_activations)
-        return previous_with_bias.T @ delta / len(delta)
+    def _output_delta(self, predictions: np.ndarray, targets: np.ndarray) -> np.ndarray:
+        return (predictions - targets) * self._tanh_derivative(predictions)
 
     def _previous_layer_delta(
         self,
@@ -68,6 +64,10 @@ class MLP:
         weights_without_bias = weights[1:, :]
         propagated_delta = delta @ weights_without_bias.T
         return propagated_delta * self._tanh_derivative(previous_activations)
+
+    def _gradient(self, previous_activations: np.ndarray, delta: np.ndarray) -> np.ndarray:
+        previous_with_bias = self._add_bias(previous_activations)
+        return previous_with_bias.T @ delta / len(delta)
 
     def _train_batch(
         self,
@@ -93,22 +93,6 @@ class MLP:
             self.weights[layer_index] -= learning_rate * gradient
             if previous_delta is not None:
                 delta = previous_delta
-
-    def _loss(self, predictions: np.ndarray, expected_outputs: np.ndarray) -> float:
-        squared_errors = (predictions - expected_outputs) ** 2
-        return float(np.mean(squared_errors) / 2.0)
-
-    def _record_metrics(
-        self,
-        history: dict[str, list[float]],
-        loss_key: str,
-        accuracy_key: str,
-        inputs: np.ndarray,
-        expected_outputs: np.ndarray,
-    ) -> None:
-        predictions = self._forward(inputs)[-1]
-        history[loss_key].append(self._loss(predictions, expected_outputs))
-        history[accuracy_key].append(self._accuracy(predictions, expected_outputs))
 
     def train(
         self,
@@ -161,6 +145,23 @@ class MLP:
                 )
 
         return history
+
+    def _record_metrics(
+        self,
+        history: dict[str, list[float]],
+        loss_key: str,
+        accuracy_key: str,
+        inputs: np.ndarray,
+        expected_outputs: np.ndarray,
+    ) -> None:
+        predictions = self._forward(inputs)[-1]
+        history[loss_key].append(self._loss(predictions, expected_outputs))
+        history[accuracy_key].append(self._accuracy(predictions, expected_outputs))
+
+
+    def _loss(self, predictions: np.ndarray, expected_outputs: np.ndarray) -> float:
+        squared_errors = (predictions - expected_outputs) ** 2
+        return float(np.mean(squared_errors) / 2.0)
 
     @staticmethod
     def _accuracy(predictions: np.ndarray, expected_outputs: np.ndarray) -> float:
